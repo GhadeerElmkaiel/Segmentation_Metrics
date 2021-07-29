@@ -20,7 +20,7 @@ path_to_target_FU = root_to_masks+"Floor under obstacle/"
 
 # path_to_target_res = "/home/ghadeer/Projects/Trans2Seg/runs/visual/with_adaptive_palette-removed/"
 
-res_root = "/home/ghadeer/Projects/SegFormer/results/SberMerged_b4_512_160000_images/"
+res_root = "/home/ghadeer/Projects/SegFormer/results/SberMerged_b0_edges_1024_160000_masks/"
 # res_root = "runs/visual/training_on_both_50_merge_masjs/"
 # res_root = "/home/ghadeer/Projects/Trans2Seg/runs/visual/training_on_both_50_merged_masks/Merged_mask/"
 
@@ -49,7 +49,12 @@ FPR_res = {"Glass": [], "Mirror":[], "OOS":[], "All_Optical":[], "Glass_Mirrors"
 precision_res = {"Glass": [], "Mirror":[], "OOS":[], "All_Optical":[], "Glass_Mirrors":[], "Floor":[], "FU":[], "All_Floor":[], "Back_Ground":[]}
 recall_res = {"Glass": [], "Mirror":[], "OOS":[], "All_Optical":[], "Glass_Mirrors":[], "Floor":[], "FU":[], "All_Floor":[], "Back_Ground":[]}
 
-confusion_matrix_placeholder = {"Glass": 0, "Mirror":0, "OOS":0, "Floor":0, "FU":0, "Back_Ground":0}
+# Confusion matrix for merged classes
+confusion_matrix_merged = {"All_Optical": {}, "All_Floor":{}, "Back_Ground":{}}
+for key in confusion_matrix_merged.keys():
+    confusion_matrix_merged[key] = {"All_Optical": 0, "All_Floor":0, "Back_Ground":0}
+
+# Confusion matrix for all single classes
 confusion_matrix = {"Glass": {}, "Mirror":{}, "OOS":{}, "Floor":{}, "FU":{}, "Back_Ground":{}}
 for key in confusion_matrix.keys():
     confusion_matrix[key] = {"Glass": 0, "Mirror":0, "OOS":0, "Floor":0, "FU":0, "Back_Ground":0}
@@ -180,7 +185,13 @@ for name in images:
         recall_res[key].append(recall_val)
         FPR_res[key].append(FPR_val)
 
-        # Clac Confusion Matrix
+    # Clac Confusion Matrix for merged classes
+    for key in confusion_matrix_merged.keys():
+        for key2 in confusion_matrix_merged.keys():
+            intersection = np.sum(np.logical_and(result_arrs[key], mask_arrs[key2]))
+            confusion_matrix_merged[key][key2] += intersection
+
+    # Clac Confusion Matrix for single classes
     for key in confusion_matrix.keys():
         for key2 in confusion_matrix.keys():
             intersection = np.sum(np.logical_and(result_arrs[key], mask_arrs[key2]))
@@ -202,7 +213,18 @@ dataframe.insert(1, "Precision", final_res["Precision"].values())
 dataframe.insert(1, "Recall", final_res["Recall"].values())
 dataframe.insert(1, "FPR", final_res["FPR"].values())
 
-# Normalizing the confusion matrix
+# Normalizing the merged classes' confusion matrix
+confusion_matrix_merged_sums = {}
+for key2 in confusion_matrix_merged.keys():
+    current_sum = 0
+    for key in confusion_matrix_merged.keys():
+        current_sum+= confusion_matrix_merged[key][key2]
+    confusion_matrix_merged_sums[key2] = current_sum
+for key2 in confusion_matrix_merged.keys():
+    for key in confusion_matrix_merged.keys():
+        confusion_matrix_merged[key][key2] = confusion_matrix_merged[key][key2]/confusion_matrix_merged_sums[key2]
+
+# Normalizing the single classes' confusion matrix
 confusion_matrix_sums = {}
 for key2 in confusion_matrix.keys():
     current_sum = 0
@@ -213,12 +235,13 @@ for key2 in confusion_matrix.keys():
     for key in confusion_matrix.keys():
         confusion_matrix[key][key2] = confusion_matrix[key][key2]/confusion_matrix_sums[key2]
 
-
+confusion_matrix_merged_dataframe =  pd.DataFrame.from_dict(confusion_matrix_merged)
 confusion_matrix_dataframe =  pd.DataFrame.from_dict(confusion_matrix)
 
 root_to_data = res_root.split('/')
 csv_name = root_to_data[-2]
 dataframe.to_csv(csv_name+".csv")
+confusion_matrix_merged_dataframe.to_csv(csv_name+"_confusion_matrix_merged.csv")
 confusion_matrix_dataframe.to_csv(csv_name+"_confusion_matrix.csv")
 print(dataframe)
 print("Done")
