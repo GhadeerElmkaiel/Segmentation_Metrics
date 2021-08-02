@@ -20,7 +20,7 @@ path_to_target_FU = root_to_masks+"Floor under obstacle/"
 
 # path_to_target_res = "/home/ghadeer/Projects/Trans2Seg/runs/visual/with_adaptive_palette-removed/"
 
-res_root = "/home/ghadeer/Projects/SegFormer/results/SberMerged_b0_edges_1024_160000_masks/"
+res_root = "/home/ghadeer/Projects/SegFormer/results/SberMerged_b5_edges_512_160000_images/"
 # res_root = "runs/visual/training_on_both_50_merge_masjs/"
 # res_root = "/home/ghadeer/Projects/Trans2Seg/runs/visual/training_on_both_50_merged_masks/Merged_mask/"
 
@@ -59,6 +59,19 @@ confusion_matrix = {"Glass": {}, "Mirror":{}, "OOS":{}, "Floor":{}, "FU":{}, "Ba
 for key in confusion_matrix.keys():
     confusion_matrix[key] = {"Glass": 0, "Mirror":0, "OOS":0, "Floor":0, "FU":0, "Back_Ground":0}
 
+# Confusion matrix for all single classes as recall
+confusion_matrix_recall = {"Glass": {}, "Mirror":{}, "OOS":{}, "Floor":{}, "FU":{}, "Back_Ground":{}}
+for key in confusion_matrix_recall.keys():
+    confusion_matrix_recall[key] = {"Glass": 0, "Mirror":0, "OOS":0, "Floor":0, "FU":0, "Back_Ground":0}
+
+# Confusion matrix for all single classes as precision
+confusion_matrix_precision = {"Glass": {}, "Mirror":{}, "OOS":{}, "Floor":{}, "FU":{}, "Back_Ground":{}}
+for key in confusion_matrix_precision.keys():
+    confusion_matrix_precision[key] = {"Glass": 0, "Mirror":0, "OOS":0, "Floor":0, "FU":0, "Back_Ground":0}
+
+Intersections = {"Glass": [], "Mirror":[], "OOS":[], "All_Optical":[], "Glass_Mirrors":[], "Floor":[], "FU":[], "All_Floor":[], "Back_Ground":[]}
+for key in Intersections.keys():
+    Intersections[key] = {"TP": 0, "TN":0, "FP":0, "FN":0}
 
 #################################################################
 src_palette = Image.open("/home/ghadeer/Projects/Datasets/Sber3500/all_palette.png")
@@ -179,6 +192,10 @@ for name in images:
         else:
             FPR_val = 0
 
+        Intersections[key]["TP"] += intersection
+        Intersections[key]["TN"] += img_size-union
+        Intersections[key]["FP"] += pred_mask_size - intersection
+        Intersections[key]["FN"] += real_mask_size - intersection
         IoU_res[key].append(iou_res)
         acc_res[key].append(acc_val)
         precision_res[key].append(precision_val)
@@ -198,22 +215,46 @@ for name in images:
             confusion_matrix[key][key2] += intersection
 
 
-final_res = {"IoU":{}, "Acc":{}, "Precision":{}, "Recall":{}, "FPR":{}}
+mean_over_images = {"IoU":{}, "Acc":{}, "Precision":{}, "Recall":{}, "FPR":{}}
 for key in acc_res.keys():
-    final_res["IoU"][key] = np.mean(IoU_res[key])
-    final_res["Acc"][key] = np.mean(acc_res[key])
-    final_res["Precision"][key] = np.mean(precision_res[key])
-    final_res["Recall"][key] = np.mean(recall_res[key])
-    final_res["FPR"][key] = np.mean(FPR_res[key])
+    mean_over_images["IoU"][key] = np.mean(IoU_res[key])
+    mean_over_images["Acc"][key] = np.mean(acc_res[key])
+    mean_over_images["Precision"][key] = np.mean(precision_res[key])
+    mean_over_images["Recall"][key] = np.mean(recall_res[key])
+    mean_over_images["FPR"][key] = np.mean(FPR_res[key])
+
+median_over_images = {"IoU":{}, "Acc":{}, "Precision":{}, "Recall":{}, "FPR":{}}
+for key in acc_res.keys():
+    median_over_images["IoU"][key] = np.median(IoU_res[key])
+    median_over_images["Acc"][key] = np.median(acc_res[key])
+    median_over_images["Precision"][key] = np.median(precision_res[key])
+    median_over_images["Recall"][key] = np.median(recall_res[key])
+    median_over_images["FPR"][key] = np.median(FPR_res[key])
+
+mean_over_all = {"Precision":{}, "Recall":{}, "FPR":{}}
+for key in acc_res.keys():
+    mean_over_all["Precision"][key] = Intersections[key]["TP"]/(Intersections[key]["TP"]+Intersections[key]["FP"])
+    mean_over_all["Recall"][key] = Intersections[key]["TP"]/(Intersections[key]["TP"]+Intersections[key]["FN"])
+    mean_over_all["FPR"][key] = Intersections[key]["FP"]/(Intersections[key]["TN"]+Intersections[key]["FP"])
 
 
-dataframe = pd.DataFrame.from_dict(final_res["IoU"], orient='index', columns=["IoU"])
-dataframe.insert(1, "Acc", final_res["Acc"].values())
-dataframe.insert(1, "Precision", final_res["Precision"].values())
-dataframe.insert(1, "Recall", final_res["Recall"].values())
-dataframe.insert(1, "FPR", final_res["FPR"].values())
+dataframe = pd.DataFrame.from_dict(mean_over_images["IoU"], orient='index', columns=["Mean IoU"])
+dataframe.insert(1, "Mean Acc", mean_over_images["Acc"].values())
+dataframe.insert(1, "Mean Precision", mean_over_images["Precision"].values())
+dataframe.insert(1, "Mean Recall", mean_over_images["Recall"].values())
+dataframe.insert(1, "Mean FPR", mean_over_images["FPR"].values())
+dataframe.insert(1, "Median IoU", median_over_images["IoU"].values())
+dataframe.insert(1, "Median Acc", median_over_images["Acc"].values())
+dataframe.insert(1, "Median Precision", median_over_images["Precision"].values())
+dataframe.insert(1, "Median Recall", median_over_images["Recall"].values())
+dataframe.insert(1, "Median FPR", median_over_images["FPR"].values())
+dataframe.insert(1, "Precision", mean_over_all["Precision"].values())
+dataframe.insert(1, "Recall", mean_over_all["Recall"].values())
+dataframe.insert(1, "FPR", mean_over_all["FPR"].values())
 
+cols = ["Mean IoU", "Mean Acc", "Mean Precision", "Mean Recall", "Mean FPR", "Median IoU", "Median Acc", "Median Precision", "Median Recall", "Median FPR", "Precision", "Recall", "FPR"]
 # Normalizing the merged classes' confusion matrix
+dataframe = dataframe[cols]
 confusion_matrix_merged_sums = {}
 for key2 in confusion_matrix_merged.keys():
     current_sum = 0
@@ -224,24 +265,46 @@ for key2 in confusion_matrix_merged.keys():
     for key in confusion_matrix_merged.keys():
         confusion_matrix_merged[key][key2] = confusion_matrix_merged[key][key2]/confusion_matrix_merged_sums[key2]
 
-# Normalizing the single classes' confusion matrix
-confusion_matrix_sums = {}
+# Normalizing the single classes' confusion matrix as recall
+confusion_matrix_sums_recall = {}
 for key2 in confusion_matrix.keys():
     current_sum = 0
     for key in confusion_matrix.keys():
         current_sum+= confusion_matrix[key][key2]
-    confusion_matrix_sums[key2] = current_sum
+    confusion_matrix_sums_recall[key2] = current_sum
+
 for key2 in confusion_matrix.keys():
     for key in confusion_matrix.keys():
-        confusion_matrix[key][key2] = confusion_matrix[key][key2]/confusion_matrix_sums[key2]
+        confusion_matrix_recall[key][key2] = confusion_matrix[key][key2]/confusion_matrix_sums_recall[key2]
+
+# Normalizing the single classes' confusion matrix as precision
+confusion_matrix_sums_precision = {}
+for key2 in confusion_matrix.keys():
+    current_sum = 0
+    for key in confusion_matrix.keys():
+        current_sum+= confusion_matrix[key2][key]
+    confusion_matrix_sums_precision[key2] = current_sum
+
+for key2 in confusion_matrix.keys():
+    for key in confusion_matrix.keys():
+        confusion_matrix_precision[key2][key] = confusion_matrix[key2][key]/confusion_matrix_sums_precision[key2]
+
+# Dividing by 10^6 (vals are measured by million pixels)
+for key2 in confusion_matrix.keys():
+    for key in confusion_matrix.keys():
+        confusion_matrix[key2][key] = confusion_matrix[key2][key]/1e6
 
 confusion_matrix_merged_dataframe =  pd.DataFrame.from_dict(confusion_matrix_merged)
 confusion_matrix_dataframe =  pd.DataFrame.from_dict(confusion_matrix)
+confusion_matrix_recall_dataframe =  pd.DataFrame.from_dict(confusion_matrix_recall)
+confusion_matrix_precision_dataframe =  pd.DataFrame.from_dict(confusion_matrix_precision)
 
 root_to_data = res_root.split('/')
 csv_name = root_to_data[-2]
 dataframe.to_csv(csv_name+".csv")
 confusion_matrix_merged_dataframe.to_csv(csv_name+"_confusion_matrix_merged.csv")
 confusion_matrix_dataframe.to_csv(csv_name+"_confusion_matrix.csv")
+confusion_matrix_recall_dataframe.to_csv(csv_name+"_confusion_matrix_recall.csv")
+confusion_matrix_precision_dataframe.to_csv(csv_name+"_confusion_matrix_precision.csv")
 print(dataframe)
 print("Done")
